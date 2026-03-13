@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini Chat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 600px;
+      overflow: hidden;
+    }
+    h2 { background: #007bff; color: white; padding: 16px 20px; font-size: 1.2rem; }
+    .chat-box {
+      height: 350px;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #fafafa;
+    }
+    .message {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .author { font-weight: bold; color: #007bff; font-size: 0.85rem; }
+    .time   { color: #9ca3af; font-size: 0.75rem; margin-left: 8px; }
+    .text   { margin-top: 4px; color: #374151; }
+    .empty  { color: #9ca3af; text-align: center; margin: auto; }
+    .input-area {
+      padding: 16px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    input:focus { border-color: #007bff; }
+    .send-row { display: flex; gap: 10px; }
+    .send-row input { flex: 1; }
+    button {
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    button:hover { background: #0056b3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>💬 Mini Chat</h2>
+    <div class="chat-box" id="chat">
+      <p class="empty">Aucun message. Sois le premier !</p>
+    </div>
+    <div class="input-area">
+      <input id="author" placeholder="Ton pseudo" maxlength="30">
+      <div class="send-row">
+        <input id="content" placeholder="Ton message..."
+               onkeydown="if(event.key==='Enter') send()">
+        <button onclick="send()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── URL du backend ──────────────────────────────────────────────────────
+    // En local (Docker Compose) : http://localhost:3000
+    // En production : remplace par ton URL Render
+    const API = "http://localhost:3000/api/messages";
+
+    // ── Charger les messages (appelé toutes les 4 secondes comme demandé) ──
+    async function load() {
+      try {
+        const res  = await fetch(API);
+        const data = await res.json();
+        const chat = document.getElementById("chat");
+        if (data.length === 0) {
+          chat.innerHTML = '<p class="empty">Aucun message. Sois le premier !</p>';
+          return;
+        }
+        chat.innerHTML = data.map(m =>
+          '<div class="message">' +
+          '<span class="author">' + m.author + '</span>' +
+          '<span class="time">'   + m.time   + '</span>' +
+          '<p class="text">'      + m.content + '</p>'  +
+          '</div>'
+        ).join("");
+        chat.scrollTop = chat.scrollHeight;
+      } catch(e) {
+        console.error("Erreur chargement :", e);
+      }
+    }
+
+    // ── Envoyer un message ────────────────────────────────────────────────
+    async function send() {
+      const author  = document.getElementById("author").value.trim();
+      const content = document.getElementById("content").value.trim();
+      if (!author)  { alert("Entre ton pseudo."); return; }
+      if (!content) { alert("Écris un message."); return; }
+      await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author, content })
+      });
+      document.getElementById("content").value = "";
+      load();
+    }
+
+    // Auto-refresh toutes les 4 secondes (comme demandé dans l'examen)
+    setInterval(load, 4000);
+    load();
+  </script>
+</body>
+</html>

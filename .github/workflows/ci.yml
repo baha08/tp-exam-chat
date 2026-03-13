@@ -1,0 +1,98 @@
+name: CI - Build & Test & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── JOB 1 : CI (exactement comme le TP CI du cours) ──────────────────────
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Backend Image
+        run: docker build -t tp-backend ./backend
+
+      - name: Build Frontend Image
+        run: docker build -t tp-frontend ./frontend
+
+      - name: List Docker Images
+        run: docker images
+
+      - name: Install docker-compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Start services
+        run: docker-compose up -d
+
+      - name: Wait for backend (comme dans le TP CI)
+        run: |
+          echo "Attente du backend (max 60s)..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api >/dev/null 2>&1; then
+              echo "Backend est prêt !"
+              break
+            fi
+            echo "En attente... ($i/30)"
+            sleep 2
+          done
+
+      - name: Test API Endpoint (curl -f comme dans le TP CI)
+        run: |
+          echo "Test de /api"
+          curl -f http://localhost:3000/api
+
+      - name: Test Messages Endpoint
+        run: |
+          echo "Test de /api/messages"
+          curl -f http://localhost:3000/api/messages
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "Logs des conteneurs :"
+          docker-compose logs
+
+  # ── JOB 2 : CD Frontend → Vercel ─────────────────────────────────────────
+  deploy-frontend:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
+
+  # ── JOB 3 : CD Backend → Render ──────────────────────────────────────────
+  deploy-backend:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
